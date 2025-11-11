@@ -3,9 +3,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 
-// Target phone viewport (approx. iPhone-16)
-const VIEWPORT_WIDTH = 430;
-const VIEWPORT_HEIGHT = 932;
+// Target phone viewport (approx. iPhone-16) - now auto-fit
+const getViewportSize = () => ({
+  width: window.innerWidth,
+  height: window.innerHeight,
+});
 const PADDING = 20; // safe padding inside the phone viewport
 const CARD_WIDTH = 80;
 const CARD_HEIGHT = 120;
@@ -100,6 +102,8 @@ function getRankDisplay(card: Card) {
 export default function Game() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
+  const viewportWidthRef = useRef(430);
+  const viewportHeightRef = useRef(932);
   const [message, setMessage] = useState("");
   type GameState = "idle" | "dealing" | "player" | "dealer" | "settled";
   const [gameState, setGameState] = useState<GameState>("idle");
@@ -118,8 +122,8 @@ export default function Game() {
       const app = appRef.current;
       if (!app) return resolve();
       // find the dealer's first card container at expected position
-      const targetX = 10;
-      const targetY = 40;
+      const targetX = (viewportWidthRef.current - 80) / 2; // approx center minus half card
+      const targetY = 290;
       const container = app.stage.children.find((ch) => {
         try {
           return (ch as any).x === targetX && (ch as any).y === targetY;
@@ -178,20 +182,23 @@ export default function Game() {
   }
 
   useEffect(() => {
+    const { width: viewportWidth, height: viewportHeight } = getViewportSize();
+    viewportWidthRef.current = viewportWidth;
+    viewportHeightRef.current = viewportHeight;
     // create Pixi app -- create a canvas first and initialize the Application
     const canvas = document.createElement("canvas");
     // make the canvas cover the full phone viewport (no extra white padding)
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = VIEWPORT_WIDTH * dpr;
-    canvas.height = VIEWPORT_HEIGHT * dpr;
+    canvas.width = viewportWidth * dpr;
+    canvas.height = viewportHeight * dpr;
 
     const app = new PIXI.Application();
     // Use the recommended init() API for Pixi v8+ and pass `canvas` (not `view`)
     if ((app as any).init) {
       (app as any).init({
         canvas: canvas,
-        width: VIEWPORT_WIDTH,
-        height: VIEWPORT_HEIGHT,
+        width: viewportWidth,
+        height: viewportHeight,
         // green felt table background
         backgroundColor: 0x0b6623,
         resolution: dpr,
@@ -199,7 +206,7 @@ export default function Game() {
       });
     } else {
       // fallback for older API versions
-      (app as any).renderer.resize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+      (app as any).renderer.resize(viewportWidth, viewportHeight);
       (app as any).renderer.backgroundColor = 0x0b6623;
     }
     appRef.current = app;
@@ -369,14 +376,14 @@ export default function Game() {
           : "Dealer",
       style: { fill: 0xffffff, fontSize: 18 } as any,
     });
-    dealerLabel.x = (VIEWPORT_WIDTH - dealerLabel.width) / 2;
+    dealerLabel.x = (viewportWidthRef.current - dealerLabel.width) / 2;
     dealerLabel.y = 260;
     app.stage.addChild(dealerLabel);
 
     // Calculate total width for dealer cards to center them
     const dealerTotalWidth =
       dealerCards.length * bgW + Math.max(0, dealerCards.length - 1) * 8;
-    const dealerStartX = (VIEWPORT_WIDTH - dealerTotalWidth) / 2;
+    const dealerStartX = (viewportWidthRef.current - dealerTotalWidth) / 2;
 
     for (let i = 0; i < dealerCards.length; i++) {
       const c = dealerCards[i];
@@ -481,14 +488,14 @@ export default function Game() {
       text: `Player (${playerScore})`,
       style: { fill: 0xffffff, fontSize: 18 } as any,
     });
-    playerLabel.x = (VIEWPORT_WIDTH - playerLabel.width) / 2;
+    playerLabel.x = (viewportWidthRef.current - playerLabel.width) / 2;
     playerLabel.y = 510;
     app.stage.addChild(playerLabel);
 
     // Calculate total width for player cards to center them
     const playerTotalWidth =
       playerCards.length * bgW + Math.max(0, playerCards.length - 1) * 8;
-    const playerStartX = (VIEWPORT_WIDTH - playerTotalWidth) / 2;
+    const playerStartX = (viewportWidthRef.current - playerTotalWidth) / 2;
 
     for (let i = 0; i < playerCards.length; i++) {
       const c = playerCards[i];
@@ -572,7 +579,7 @@ export default function Game() {
         text: message,
         style: { fill: 0xffffff, fontSize: 20 } as any,
       });
-      msg.x = (VIEWPORT_WIDTH - msg.width) / 2;
+      msg.x = (viewportWidthRef.current - msg.width) / 2;
       msg.y = 540 + 120 + 30;
       app.stage.addChild(msg);
     }
@@ -751,8 +758,8 @@ export default function Game() {
   return (
     <div
       style={{
-        width: VIEWPORT_WIDTH,
-        height: VIEWPORT_HEIGHT,
+        width: viewportWidthRef.current,
+        height: viewportHeightRef.current,
         padding: 0,
         boxSizing: "border-box",
         margin: 0,
