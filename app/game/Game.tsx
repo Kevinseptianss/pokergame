@@ -122,8 +122,8 @@ export default function Game() {
       const app = appRef.current;
       if (!app) return resolve();
       // find the dealer's first card container at expected position
-      const targetX = (viewportWidthRef.current - 80) / 2; // approx center minus half card
-      const targetY = 290;
+      const targetX = Math.round((viewportWidthRef.current - CARD_WIDTH) / 2); // approx center
+      const targetY = Math.round(viewportHeightRef.current * 0.18);
       const container = app.stage.children.find((ch) => {
         try {
           return (ch as any).x === targetX && (ch as any).y === targetY;
@@ -377,7 +377,9 @@ export default function Game() {
       style: { fill: 0xffffff, fontSize: 18 } as any,
     });
     dealerLabel.x = (viewportWidthRef.current - dealerLabel.width) / 2;
-    dealerLabel.y = 260;
+    // dynamic Y: place dealer cards around ~18% of viewport height
+    const dealerCardY = Math.round(viewportHeightRef.current * 0.18);
+    dealerLabel.y = dealerCardY - 30;
     app.stage.addChild(dealerLabel);
 
     // Calculate total width for dealer cards to center them
@@ -476,7 +478,7 @@ export default function Game() {
       }
 
       cardContainer.x = dealerStartX + i * cardSpacing;
-      cardContainer.y = 290;
+      cardContainer.y = dealerCardY;
       // keep card containers above the table
       cardContainer.zIndex = 10;
       app.stage.addChild(cardContainer);
@@ -489,7 +491,9 @@ export default function Game() {
       style: { fill: 0xffffff, fontSize: 18 } as any,
     });
     playerLabel.x = (viewportWidthRef.current - playerLabel.width) / 2;
-    playerLabel.y = 510;
+    // dynamic Y: place player cards around ~58% of viewport height
+    const playerCardY = Math.round(viewportHeightRef.current * 0.58);
+    playerLabel.y = playerCardY - 30;
     app.stage.addChild(playerLabel);
 
     // Calculate total width for player cards to center them
@@ -568,7 +572,7 @@ export default function Game() {
       // removed internal rank label for cleaner card visuals
 
       cardContainer.x = playerStartX + i * cardSpacing;
-      cardContainer.y = 540;
+      cardContainer.y = playerCardY;
       cardContainer.zIndex = 10;
       app.stage.addChild(cardContainer);
     }
@@ -580,7 +584,8 @@ export default function Game() {
         style: { fill: 0xffffff, fontSize: 20 } as any,
       });
       msg.x = (viewportWidthRef.current - msg.width) / 2;
-      msg.y = 540 + 120 + 30;
+      // position message under player cards
+      msg.y = playerCardY + bgH + 20;
       app.stage.addChild(msg);
     }
 
@@ -784,7 +789,11 @@ export default function Game() {
           style={{
             position: "absolute",
             left: "50%",
-            bottom: 18,
+            // position below the player cards dynamically
+            top:
+              Math.round(viewportHeightRef.current * 0.58) +
+              (CARD_HEIGHT + CARD_PAD * 2) +
+              50,
             transform: "translateX(-50%)",
             display: "flex",
             gap: 12,
