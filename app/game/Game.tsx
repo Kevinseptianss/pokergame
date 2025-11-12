@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import * as PIXI from "pixi.js";
 
 // Target phone viewport (approx. iPhone-16) - now auto-fit
@@ -112,17 +113,22 @@ export default function Game() {
   const deckRef = useRef<Card[]>([]);
   const texturesRef = useRef<Record<string, PIXI.Texture>>({});
   const [money, setMoney] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('blackjackMoney');
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("blackjackMoney");
       return saved ? parseInt(saved, 10) : 1000;
     }
     return 1000;
   });
   const [currentBet, setCurrentBet] = useState(10);
   const [showBet, setShowBet] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('blackjackMoney', money.toString());
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("blackjackMoney", money.toString());
   }, [money]);
 
   function sleep(ms: number) {
@@ -198,6 +204,12 @@ export default function Game() {
     const { width: viewportWidth, height: viewportHeight } = getViewportSize();
     viewportWidthRef.current = viewportWidth;
     viewportHeightRef.current = viewportHeight;
+
+    // Clear any existing content
+    if (containerRef.current) {
+      containerRef.current.innerHTML = "";
+    }
+
     // create Pixi app -- create a canvas first and initialize the Application
     const canvas = document.createElement("canvas");
     // make the canvas cover the full phone viewport (no extra white padding)
@@ -205,101 +217,122 @@ export default function Game() {
     canvas.width = viewportWidth * dpr;
     canvas.height = viewportHeight * dpr;
 
-    const app = new PIXI.Application();
-    // Use the recommended init() API for Pixi v8+ and pass `canvas` (not `view`)
-    if ((app as any).init) {
-      (app as any).init({
-        canvas: canvas,
-        width: viewportWidth,
-        height: viewportHeight,
-        // green felt table background
-        backgroundColor: 0x0b6623,
-        resolution: dpr,
-        autoDensity: true,
-      });
-    } else {
-      // fallback for older API versions
-      (app as any).renderer.resize(viewportWidth, viewportHeight);
-      (app as any).renderer.backgroundColor = 0x0b6623;
-    }
-    appRef.current = app;
-    if (containerRef.current) {
-      // ensure the container fills available area then append the Pixi canvas
-      containerRef.current.style.width = "100%";
-      containerRef.current.style.height = "100%";
-      containerRef.current.style.position = "relative";
-      containerRef.current.appendChild(canvas);
-      // ensure the canvas scales to the container size on the page
-      canvas.style.width = "100%";
-      canvas.style.height = "100%";
-    }
-
-    // Preload card textures (attempt common 52 names) using Texture.fromURL
     (async () => {
-      const deck = createDeck();
-      const promises: Promise<void>[] = [];
-      for (const c of deck) {
-        const baseUrl = cardFilename(c);
-        const url2x = baseUrl.replace(/(.png)$/, "@2x.png");
-        const try2x = (window.devicePixelRatio || 1) > 1;
-        const p = (async () => {
-          if (try2x) {
-            try {
-              const tex = await (PIXI.Assets as any).load(url2x);
-              texturesRef.current[c] = tex;
-              return;
-            } catch (e) {
-              // fallback to normal
-            }
-          }
-          try {
-            const tex = await (PIXI.Assets as any).load(baseUrl);
-            texturesRef.current[c] = tex;
-          } catch (e) {
-            // missing texture; we'll fallback to placeholder when rendering
-          }
-        })();
-        promises.push(p as Promise<void>);
+      const app = new PIXI.Application();
+      // Use the recommended init() API for Pixi v8+ and pass `canvas` (not `view`)
+      if ((app as any).init) {
+        await (app as any).init({
+          canvas: canvas,
+          width: viewportWidth,
+          height: viewportHeight,
+          // green felt table background
+          backgroundColor: 0x0b6623,
+          resolution: dpr,
+          autoDensity: true,
+        });
+      } else {
+        // fallback for older API versions
+        (app as any).renderer.resize(viewportWidth, viewportHeight);
+        (app as any).renderer.backgroundColor = 0x0b6623;
       }
-      // load table background image
-      const tableP = (PIXI.Assets as any)
-        .load("/table.png")
-        .then((tex: PIXI.Texture) => {
-          texturesRef.current["TABLE"] = tex;
-        })
-        .catch(() => {
-          // ignore
-        });
-      promises.push(tableP);
-      // load card back (and prefer back@2x on high DPR if present)
-      const backUrl =
-        (window.devicePixelRatio || 1) > 1
-          ? "/cards/back@2x.png"
-          : "/cards/back.png";
-      const backP = (PIXI.Assets as any)
-        .load(backUrl)
-        .then((tex: PIXI.Texture) => {
-          texturesRef.current["BACK"] = tex;
-        })
-        .catch(async () => {
-          // fallback to non-@2x
-          try {
-            const tex = await (PIXI.Assets as any).load("/cards/back.png");
-            texturesRef.current["BACK"] = tex;
-          } catch (e) {
-            /* ignore */
-          }
-        });
-      promises.push(backP);
+      appRef.current = app;
 
-      await Promise.all(promises);
-      // start a new game once textures are ready
-      startNewGame();
+      if (containerRef.current) {
+        // ensure the container fills available area then append the Pixi canvas
+        containerRef.current.style.width = "100%";
+        containerRef.current.style.height = "100%";
+        containerRef.current.style.position = "relative";
+        containerRef.current.appendChild(canvas);
+        // ensure the canvas scales to the container size on the page
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+      }
+
+      // Preload card textures (attempt common 52 names) using Texture.fromURL
+      (async () => {
+        const deck = createDeck();
+        const promises: Promise<void>[] = [];
+        for (const c of deck) {
+          const baseUrl = cardFilename(c);
+          const url2x = baseUrl.replace(/(.png)$/, "@2x.png");
+          const try2x = (window.devicePixelRatio || 1) > 1;
+          const p = (async () => {
+            if (try2x) {
+              try {
+                const tex = await (PIXI.Assets as any).load(url2x);
+                texturesRef.current[c] = tex;
+                return;
+              } catch (e) {
+                // fallback to normal
+              }
+            }
+            try {
+              const tex = await (PIXI.Assets as any).load(baseUrl);
+              texturesRef.current[c] = tex;
+            } catch (e) {
+              // missing texture; we'll fallback to placeholder when rendering
+            }
+          })();
+          promises.push(p as Promise<void>);
+        }
+        // load table background image
+        const tableP = (PIXI.Assets as any)
+          .load("/table.png")
+          .then((tex: PIXI.Texture) => {
+            texturesRef.current["TABLE"] = tex;
+          })
+          .catch(() => {
+            // ignore
+          });
+        promises.push(tableP);
+        // load card back (and prefer back@2x on high DPR if present)
+        const backUrl =
+          (window.devicePixelRatio || 1) > 1
+            ? "/cards/back@2x.png"
+            : "/cards/back.png";
+        const backP = (PIXI.Assets as any)
+          .load(backUrl)
+          .then((tex: PIXI.Texture) => {
+            texturesRef.current["BACK"] = tex;
+          })
+          .catch(async () => {
+            // fallback to non-@2x
+            try {
+              const tex = await (PIXI.Assets as any).load("/cards/back.png");
+              texturesRef.current["BACK"] = tex;
+            } catch (e) {
+              /* ignore */
+            }
+          });
+        promises.push(backP);
+
+        await Promise.all(promises);
+        // start a new game once textures are ready
+        renderScene();
+        startNewGame();
+      })();
     })();
 
     return () => {
-      app.destroy(true, { children: true });
-      appRef.current = null;
+      // Safely stop ticker and destroy app -- ticker may be undefined on some environments
+      if (appRef.current) {
+        try {
+          if (
+            appRef.current.ticker &&
+            typeof appRef.current.ticker.stop === "function"
+          ) {
+            appRef.current.ticker.stop();
+          }
+        } catch (e) {
+          // ignore
+        }
+        try {
+          appRef.current.destroy(true, { children: true });
+        } catch (e) {
+          // ignore
+        }
+        appRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -379,6 +412,19 @@ export default function Game() {
       tableSprite.zIndex = 0;
       app.stage.addChild(tableSprite);
     }
+
+    // Money display
+    const moneyText = new PIXI.Text({
+      text: `Money: $${money}`,
+      style: {
+        fontFamily: "Arial",
+        fontSize: 24,
+        fill: 0xffffff,
+      },
+    });
+    moneyText.x = 10;
+    moneyText.y = 10;
+    app.stage.addChild(moneyText);
 
     // Dealer
     const dealerScore = scoreHand(dealerCards);
@@ -761,12 +807,11 @@ export default function Game() {
       else if (dealerScore > 21) {
         setMessage(`Dealer busted (${dealerScore}) - You win`);
         setMoney(money + currentBet * 2);
-      }
-      else if (playerScore > dealerScore) {
+      } else if (playerScore > dealerScore) {
         setMessage(`You win (${playerScore} vs ${dealerScore})`);
         setMoney(money + currentBet * 2);
-      }
-      else if (playerScore < dealerScore) setMessage(`You lose (${playerScore} vs ${dealerScore})`);
+      } else if (playerScore < dealerScore)
+        setMessage(`You lose (${playerScore} vs ${dealerScore})`);
       else setMessage(`Push (${playerScore})`);
 
       setGameState("settled");
@@ -778,7 +823,7 @@ export default function Game() {
   useEffect(() => {
     renderScene();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerCards, dealerCards, message, gameState]);
+  }, [playerCards, dealerCards, message, gameState, money]);
 
   return (
     <div
@@ -806,69 +851,120 @@ export default function Game() {
 
         {/* Buttons overlayed on top of the table, inside the phone viewport */}
         {!showBet && (
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            // position below the player cards dynamically
-            top:
-              Math.round(viewportHeightRef.current * 0.58) +
-              (CARD_HEIGHT + CARD_PAD * 2) +
-              50,
-            transform: "translateX(-50%)",
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-            pointerEvents: "none", // allow individual buttons to control pointerEvents
-          }}
-        >
-          <button
-            onClick={playerHit}
+          <div
             style={{
-              ...buttonStyle,
-              pointerEvents: gameState === "player" ? "auto" : "none",
-              opacity: gameState === "player" ? 1 : 0.5,
+              position: "absolute",
+              left: "50%",
+              // position below the player cards dynamically
+              top:
+                Math.round(viewportHeightRef.current * 0.58) +
+                (CARD_HEIGHT + CARD_PAD * 2) +
+                50,
+              transform: "translateX(-50%)",
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              pointerEvents: "none", // allow individual buttons to control pointerEvents
             }}
-            aria-label="Hit"
-            disabled={gameState !== "player"}
           >
-            Hit
-          </button>
-          <button
-            onClick={playerStand}
-            style={{
-              ...buttonStyle,
-              pointerEvents: gameState === "player" ? "auto" : "none",
-              opacity: gameState === "player" ? 1 : 0.5,
-            }}
-            aria-label="Stand"
-            disabled={gameState !== "player"}
-          >
-            Stand
-          </button>
-          <button
-            onClick={() => {
-              startNewGame();
-            }}
-            style={{ ...buttonStyle, pointerEvents: "auto" }}
-            aria-label="New Game"
-          >
-            New Game
-          </button>
-        </div>
+            <button
+              onClick={playerHit}
+              style={{
+                ...buttonStyle,
+                pointerEvents: gameState === "player" ? "auto" : "none",
+                opacity: gameState === "player" ? 1 : 0.5,
+              }}
+              aria-label="Hit"
+              disabled={gameState !== "player"}
+            >
+              Hit
+            </button>
+            <button
+              onClick={playerStand}
+              style={{
+                ...buttonStyle,
+                pointerEvents: gameState === "player" ? "auto" : "none",
+                opacity: gameState === "player" ? 1 : 0.5,
+              }}
+              aria-label="Stand"
+              disabled={gameState !== "player"}
+            >
+              Stand
+            </button>
+            <button
+              onClick={() => {
+                startNewGame();
+              }}
+              style={{ ...buttonStyle, pointerEvents: "auto" }}
+              aria-label="New Game"
+            >
+              New Game
+            </button>
+          </div>
         )}
 
         {showBet && (
-          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'white', background: 'rgba(0,0,0,0.8)', padding: '20px', borderRadius: '10px' }}>
-            <h2>Money: ${money}</h2>
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              textAlign: "center",
+              color: "white",
+              background: "rgba(0,0,0,0.8)",
+              padding: "20px",
+              borderRadius: "10px",
+            }}
+          >
+            <h2>Money: ${isHydrated ? money : 1000}</h2>
             <p>Bet: ${currentBet}</p>
-            <button onClick={() => setCurrentBet(Math.max(5, currentBet - 5))} style={buttonStyle}>-</button>
-            <span style={{ margin: '0 10px' }}>{currentBet}</span>
-            <button onClick={() => setCurrentBet(currentBet + 5)} style={buttonStyle}>+</button>
+            <button
+              onClick={() => setCurrentBet(Math.max(5, currentBet - 5))}
+              style={buttonStyle}
+            >
+              -
+            </button>
+            <span style={{ margin: "0 10px" }}>{currentBet}</span>
+            <button
+              onClick={() => setCurrentBet(currentBet + 5)}
+              style={buttonStyle}
+            >
+              +
+            </button>
             <br />
-            <button onClick={() => { if (money >= currentBet) { setMoney(money - currentBet); setShowBet(false); startNewGame(); } }} style={{ ...buttonStyle, marginTop: '10px' }}>Confirm Bet</button>
+            <button
+              onClick={() => {
+                if (money >= currentBet) {
+                  setMoney(money - currentBet);
+                  setShowBet(false);
+                  startNewGame();
+                }
+              }}
+              style={{ ...buttonStyle, marginTop: "10px" }}
+            >
+              Confirm Bet
+            </button>
           </div>
         )}
+
+        <Link
+          href="/"
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            background: "rgba(0,0,0,0.8)",
+            color: "white",
+            padding: "10px 15px",
+            borderRadius: "5px",
+            textDecoration: "none",
+            fontSize: "16px",
+            zIndex: 1000,
+          }}
+        >
+          Back to Menu
+        </Link>
       </div>
     </div>
   );
