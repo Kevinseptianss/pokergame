@@ -111,6 +111,19 @@ export default function Game() {
   const [dealerCards, setDealerCards] = useState<Card[]>([]);
   const deckRef = useRef<Card[]>([]);
   const texturesRef = useRef<Record<string, PIXI.Texture>>({});
+  const [money, setMoney] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('blackjackMoney');
+      return saved ? parseInt(saved, 10) : 1000;
+    }
+    return 1000;
+  });
+  const [currentBet, setCurrentBet] = useState(10);
+  const [showBet, setShowBet] = useState(true);
+
+  useEffect(() => {
+    localStorage.setItem('blackjackMoney', money.toString());
+  }, [money]);
 
   function sleep(ms: number) {
     return new Promise((res) => setTimeout(res, ms));
@@ -693,12 +706,14 @@ export default function Game() {
         }
         if (playerNatural && !dealerNatural) {
           setMessage(`Blackjack! You win (${playerScore})`);
+          setMoney(money + currentBet * 2);
         } else if (!playerNatural && dealerNatural) {
           setMessage(`Dealer has Blackjack (${dealerScore}) - You lose`);
         } else {
           setMessage(`Push (both Blackjack)`);
         }
         setGameState("settled");
+        setShowBet(true);
       } else {
         setGameState("player");
       }
@@ -715,6 +730,7 @@ export default function Game() {
     if (s > 21) {
       setMessage(`Busted (${s}) - You lose`);
       setGameState("settled");
+      setShowBet(true);
     }
   }
 
@@ -742,15 +758,19 @@ export default function Game() {
       const playerScore = scoreHand(playerCards);
       const dealerScore = scoreHand(d);
       if (playerScore > 21) setMessage(`Busted (${playerScore}) - You lose`);
-      else if (dealerScore > 21)
+      else if (dealerScore > 21) {
         setMessage(`Dealer busted (${dealerScore}) - You win`);
-      else if (playerScore > dealerScore)
+        setMoney(money + currentBet * 2);
+      }
+      else if (playerScore > dealerScore) {
         setMessage(`You win (${playerScore} vs ${dealerScore})`);
-      else if (playerScore < dealerScore)
-        setMessage(`You lose (${playerScore} vs ${dealerScore})`);
+        setMoney(money + currentBet * 2);
+      }
+      else if (playerScore < dealerScore) setMessage(`You lose (${playerScore} vs ${dealerScore})`);
       else setMessage(`Push (${playerScore})`);
 
       setGameState("settled");
+      setShowBet(true);
     })();
   }
 
@@ -785,6 +805,7 @@ export default function Game() {
         <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
         {/* Buttons overlayed on top of the table, inside the phone viewport */}
+        {!showBet && (
         <div
           style={{
             position: "absolute",
@@ -835,6 +856,19 @@ export default function Game() {
             New Game
           </button>
         </div>
+        )}
+
+        {showBet && (
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'white', background: 'rgba(0,0,0,0.8)', padding: '20px', borderRadius: '10px' }}>
+            <h2>Money: ${money}</h2>
+            <p>Bet: ${currentBet}</p>
+            <button onClick={() => setCurrentBet(Math.max(5, currentBet - 5))} style={buttonStyle}>-</button>
+            <span style={{ margin: '0 10px' }}>{currentBet}</span>
+            <button onClick={() => setCurrentBet(currentBet + 5)} style={buttonStyle}>+</button>
+            <br />
+            <button onClick={() => { if (money >= currentBet) { setMoney(money - currentBet); setShowBet(false); startNewGame(); } }} style={{ ...buttonStyle, marginTop: '10px' }}>Confirm Bet</button>
+          </div>
+        )}
       </div>
     </div>
   );
